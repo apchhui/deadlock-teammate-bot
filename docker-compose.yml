@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  bot:
+    build: .
+    container_name: deadlock_bot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - botnet
+    volumes:
+      - ./logs:/app/logs
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: deadlock_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-deadlock}
+      POSTGRES_USER: ${POSTGRES_USER:-deadlock}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deadlock}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - botnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-deadlock} -d ${POSTGRES_DB:-deadlock}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: deadlock_redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redisdata:/data
+    networks:
+      - botnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  botnet:
+    driver: bridge
